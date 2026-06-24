@@ -25,6 +25,12 @@ Sensor → POST /ingest → FastAPI → WebSocket broadcast → Live dashboard
 
 ## Why I built this
 Vehicle telemetry, industrial IoT, and robotics systems all share the same 
+
+## Knowledge Graph
+Built a vehicle sensor knowledge graph using NetworkX representing 
+relationships between sensors, systems and the telemetry platform.
+
+![Knowledge Graph](knowledge_graph.png)
 core problem: high-frequency data that needs to be ingested, processed, and 
 visualized in real time. This is my working implementation of that pipeline.
 
