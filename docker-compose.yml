@@ -1,7 +1,24 @@
-version: "3.8"
 services:
   telemetry:
     build: .
     ports:
       - "8000:8000"
     restart: always
+    environment:
+      - DATABASE_URL=postgresql://affan:telemetry123@db:5432/telemetry
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=affan
+      - POSTGRES_PASSWORD=telemetry123
+      - POSTGRES_DB=telemetry
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
