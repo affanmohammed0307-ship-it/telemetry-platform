@@ -2,7 +2,8 @@
 
 Real-time vehicle sensor monitoring with intelligent anomaly detection, live dashboards, PostgreSQL persistence, and Docker deployment.
 
-![Dashboard](dashboard.png)
+![Dashboard](<img width="1913" height="1086" alt="dashboard" src="https://github.com/user-attachments/assets/8bf19dbd-a2ee-47e4-b781-6ca00aa8605c" />
+)
 
 ## What it does
 
