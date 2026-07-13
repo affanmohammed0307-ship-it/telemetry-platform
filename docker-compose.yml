@@ -4,21 +4,54 @@ services:
     ports:
       - "8000:8000"
     restart: always
-    environment:
-      - DATABASE_URL=postgresql://affan:telemetry123@db:5432/telemetry
+    env_file: .env
     depends_on:
       - db
+      - mqtt
+
+  simulator:
+    build: .
+    command: ["python", "simulate.py"]
+    restart: always
+    env_file: .env
+    depends_on:
+      - mqtt
+      - telemetry
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - mosquitto_data:/mosquitto/data
 
   db:
-    image: postgres:15
-    environment:
-      - POSTGRES_USER=affan
-      - POSTGRES_PASSWORD=telemetry123
-      - POSTGRES_DB=telemetry
+    image: timescale/timescaledb:latest-pg15
+    env_file: .env
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    env_file: .env
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - db
+
 volumes:
   postgres_data:
+  mosquitto_data:
+  grafana_data:

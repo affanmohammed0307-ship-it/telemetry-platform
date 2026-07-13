@@ -2,7 +2,13 @@ import psycopg2
 import os
 from datetime import datetime
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://affan:telemetry123@localhost:5432/telemetry")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. Copy .env.example to .env, fill in real "
+        "values, and run via `docker compose up` (which loads .env) or "
+        "export DATABASE_URL yourself for local runs."
+    )
 
 def get_connection():
     return psycopg2.connect(DATABASE_URL)
@@ -10,15 +16,35 @@ def get_connection():
 def init_db():
     conn = get_connection()
     cursor = conn.cursor()
+
+    cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
+
+    # Note: no SERIAL/PRIMARY KEY on id alone — TimescaleDB hypertables
+    # require the partitioning column (timestamp) in any uniqueness
+    # constraint, so we key on (id, timestamp) instead.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS sensor_readings (
-            id SERIAL PRIMARY KEY,
+            id SERIAL,
             sensor_id VARCHAR(100),
             value FLOAT,
-            timestamp TIMESTAMP,
-            alert VARCHAR(255)
+            timestamp TIMESTAMP NOT NULL,
+            alert VARCHAR(255),
+            PRIMARY KEY (id, timestamp)
         )
     """)
+
+    # Convert to a hypertable (chunked by time) for efficient high-frequency
+    # sensor writes and time-range queries. Safe to call repeatedly.
+    cursor.execute("""
+        SELECT create_hypertable('sensor_readings', 'timestamp',
+                                  if_not_exists => TRUE)
+    """)
+
+    cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_sensor_readings_sensor_time
+        ON sensor_readings (sensor_id, timestamp DESC)
+    """)
+
     conn.commit()
     cursor.close()
     conn.close()

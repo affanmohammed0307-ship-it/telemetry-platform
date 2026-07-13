@@ -5,13 +5,39 @@ from datetime import datetime
 import json, random
 from alerts import check_alert
 from database import init_db, save_reading, get_recent_readings
+from mqtt_client import MQTTBridge
 
 app = FastAPI()
 active_connections = []
+mqtt_bridge = None
+
+
+async def handle_reading(sensor_id: str, value: float, timestamp: str):
+    """Shared pipeline: anomaly check -> persist -> broadcast. Used by both
+    the MQTT bridge and the /ingest REST endpoint."""
+    alert = check_alert(sensor_id, value)
+    save_reading(sensor_id, value, timestamp, alert)
+    record = {"sensor_id": sensor_id, "value": value, "timestamp": timestamp, "alert": alert}
+    for ws in list(active_connections):
+        try:
+            await ws.send_text(json.dumps(record))
+        except Exception:
+            pass
+    return alert
+
 
 @app.on_event("startup")
 def startup():
+    global mqtt_bridge
     init_db()
+    mqtt_bridge = MQTTBridge(handle_reading)
+    mqtt_bridge.start()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    if mqtt_bridge:
+        mqtt_bridge.stop()
 
 class SensorData(BaseModel):
     sensor_id: str
@@ -20,11 +46,9 @@ class SensorData(BaseModel):
 
 @app.post("/ingest")
 async def ingest(data: SensorData):
-    alert = check_alert(data.sensor_id, data.value)
-    save_reading(data.sensor_id, data.value, data.timestamp, alert)
-    record = {**data.dict(), "alert": alert}
-    for ws in active_connections:
-        await ws.send_text(json.dumps(record))
+    """Manual/debug ingestion path. In normal operation, sensors publish to
+    MQTT (see mqtt_client.py) and this pipeline runs via the bridge instead."""
+    alert = await handle_reading(data.sensor_id, data.value, data.timestamp)
     return {"status": "ok", "alert": alert}
 
 @app.get("/data")
